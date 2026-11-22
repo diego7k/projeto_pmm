@@ -1,15 +1,6 @@
-"""
-Painel de Mortalidade Materna no Brasil (2014–2024) — ODS 5 e ODS 18.
-
-Dashboard em Plotly Dash que consulta o PostgreSQL (Aiven) a cada interação.
-
-Rodar localmente (a partir da pasta projeto/):
-    pip install -r requirements.txt
-    python dashboard/app.py            -> http://127.0.0.1:8050
-
-Em produção (Render/qualquer PaaS):
-    gunicorn --chdir dashboard app:server
-"""
+# Dashboard da mortalidade materna (Plotly Dash). Consulta o PostgreSQL da Aiven a cada filtro.
+# Rodar de dentro de projeto/: python dashboard/app.py  (abre em http://127.0.0.1:8050)
+# No Render roda com gunicorn --chdir dashboard app:server
 import json
 import os
 from datetime import datetime
@@ -28,17 +19,15 @@ AQUI = Path(__file__).parent
 GEOJSON = json.loads((AQUI / "br_ufs.geojson").read_text(encoding="utf-8"))
 FUSO = ZoneInfo("America/Sao_Paulo")
 
-# ---------------------------------------------------------------------------
-# Identidade visual
-# ---------------------------------------------------------------------------
-TINTA = "#0b0b0b"
-TINTA_2 = "#52514e"
-TINTA_MUDA = "#898781"
-GRADE = "#e1e0d9"
-BASE = "#c3c2b7"
-SUPERFICIE = "#fcfcfb"
+# cores
+PRETO = "#0b0b0b"
+CINZA_ESCURO = "#52514e"
+CINZA = "#898781"
+CINZA_CLARO = "#e1e0d9"
+COR_EIXO = "#c3c2b7"
+BRANCO = "#fcfcfb"
 
-# cor fixa por raça/cor (a cor acompanha a categoria em todos os gráficos, mesmo filtrando)
+# cada raça/cor tem sempre a mesma cor, em todos os gráficos
 CORES_RACA = {
     "Parda": "#2a78d6",
     "Preta": "#eb6834",
@@ -56,8 +45,9 @@ CORES_EXTERNAS = {
     "Acidente de transporte": "#a3a19a",
     "Outras causas externas": "#d3d1c9",
 }
-# rampa sequencial (um só tom, claro -> escuro)
-RAMPA = ["#e8f1fc", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+# azul claro -> escuro, usado no mapa e na matriz
+AZUIS = ["#e8f1fc", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+ESCALA_AZUL = [[i / (len(AZUIS) - 1), c] for i, c in enumerate(AZUIS)]
 
 METRICAS = {
     "negras": "% de mulheres negras",
@@ -80,7 +70,7 @@ LEGENDA_MATRIZ = {
     "sem_cmm": "Cada célula: % dos óbitos do grupo sem investigação registrada pelo Comitê de Mortalidade Materna.",
     "obitos": "Cada célula: número de óbitos maternos oficiais do grupo.",
 }
-MIN_CASOS = 20  # abaixo disso a porcentagem é instável e a célula fica sem cor
+MIN_CASOS = 20  # com menos de 20 óbitos a % muda muito com 1 caso, então não mostramos
 
 
 def fmt_int(n):
@@ -101,21 +91,21 @@ def layout_base(fig, altura=340, **kw):
         margin=dict(l=8, r=8, t=8, b=8),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', size=12, color=TINTA_2),
+        font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', size=12, color=CINZA_ESCURO),
         separators=",.",
-        hoverlabel=dict(bgcolor="white", bordercolor=GRADE, font=dict(color=TINTA, size=12)),
+        hoverlabel=dict(bgcolor="white", bordercolor=CINZA_CLARO, font=dict(color=PRETO, size=12)),
         legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0, title=None,
-                    font=dict(color=TINTA_2)),
+                    font=dict(color=CINZA_ESCURO)),
         **kw,
     )
-    fig.update_xaxes(showgrid=False, linecolor=BASE, ticks="", tickfont=dict(color=TINTA_MUDA), zeroline=False)
-    fig.update_yaxes(gridcolor=GRADE, gridwidth=1, zeroline=False, linecolor=BASE, tickfont=dict(color=TINTA_MUDA))
+    fig.update_xaxes(showgrid=False, linecolor=COR_EIXO, ticks="", tickfont=dict(color=CINZA), zeroline=False)
+    fig.update_yaxes(gridcolor=CINZA_CLARO, gridwidth=1, zeroline=False, linecolor=COR_EIXO, tickfont=dict(color=CINZA))
     return fig
 
 
 def figura_vazia(msg="Sem dados para os filtros escolhidos", altura=340):
     fig = go.Figure()
-    fig.add_annotation(text=msg, showarrow=False, font=dict(color=TINTA_MUDA, size=13), x=0.5, y=0.5,
+    fig.add_annotation(text=msg, showarrow=False, font=dict(color=CINZA, size=13), x=0.5, y=0.5,
                        xref="paper", yref="paper")
     layout_base(fig, altura)
     fig.update_xaxes(visible=False)
@@ -123,9 +113,7 @@ def figura_vazia(msg="Sem dados para os filtros escolhidos", altura=340):
     return fig
 
 
-# ---------------------------------------------------------------------------
-# Figuras
-# ---------------------------------------------------------------------------
+# gráficos
 def fig_serie(df, modo):
     if df.empty:
         return figura_vazia()
@@ -137,10 +125,10 @@ def fig_serie(df, modo):
     if 2020 in anos or 2021 in anos:
         fig.add_vrect(x0=2019.5, x1=2021.5, fillcolor="#f0efec", line_width=0, layer="below")
         fig.add_annotation(x=2020.5, y=1, yref="paper", text="COVID-19", showarrow=False,
-                           font=dict(size=11, color=TINTA_MUDA), yanchor="top")
+                           font=dict(size=11, color=CINZA), yanchor="top")
     if 2024 in anos:
         fig.add_annotation(x=2024, y=1, yref="paper", text="preliminar", showarrow=False,
-                           font=dict(size=11, color=TINTA_MUDA), yanchor="top", xanchor="center")
+                           font=dict(size=11, color=CINZA), yanchor="top", xanchor="center")
     for raca in ORDEM_RACA:
         if raca not in tabela:
             continue
@@ -149,7 +137,7 @@ def fig_serie(df, modo):
         fig.add_trace(go.Scatter(
             x=anos, y=y, name=raca, mode="lines+markers",
             line=dict(color=CORES_RACA[raca], width=2, shape="linear"),
-            marker=dict(size=8, color=CORES_RACA[raca], line=dict(color=SUPERFICIE, width=2)),
+            marker=dict(size=8, color=CORES_RACA[raca], line=dict(color=BRANCO, width=2)),
             hovertemplate=f"<b>{raca}</b>: {formato}<extra></extra>",
         ))
     layout_base(fig, 340, hovermode="x unified")
@@ -177,9 +165,9 @@ def fig_mapa(df, metrica):
         geojson=GEOJSON, featureidkey="properties.sigla",
         locations=df["uf"], z=df["valor"], customdata=df[["texto"]],
         zmin=0, zmax=max(df["valor"].max(), 1) if df["valor"].notna().any() else 1,
-        colorscale=[[i / (len(RAMPA) - 1), c] for i, c in enumerate(RAMPA)],
+        colorscale=ESCALA_AZUL,
         marker_line_color="white", marker_line_width=0.8,
-        colorbar=dict(thickness=10, len=0.6, outlinewidth=0, tickfont=dict(color=TINTA_MUDA), **barra),
+        colorbar=dict(thickness=10, len=0.6, outlinewidth=0, tickfont=dict(color=CINZA), **barra),
         hovertemplate="<b>%{location}</b><br>%{customdata[0]}<extra></extra>",
     ))
     fig.update_geos(visible=False, fitbounds="locations", projection_type="mercator", bgcolor="rgba(0,0,0,0)")
@@ -199,8 +187,9 @@ def fig_matriz(df, metrica, dimensao):
     if dimensao == "periodo_obito":
         colunas = [c for c in ROTULO_PERIODO.values() if c in tab_num.columns]
     else:
-        colunas = sorted(c for c in tab_num.columns if c not in ("Ignorada",))
-    tab_num, tab_den = tab_num.reindex(index=linhas, columns=colunas), tab_den.reindex(index=linhas, columns=colunas)
+        colunas = sorted(c for c in tab_num.columns if c != "Ignorada")
+    tab_num = tab_num.reindex(index=linhas, columns=colunas)
+    tab_den = tab_den.reindex(index=linhas, columns=colunas)
 
     if metrica == "obitos":
         valores = tab_num
@@ -209,34 +198,45 @@ def fig_matriz(df, metrica, dimensao):
     else:
         valores = (tab_num / tab_den.where(tab_den >= MIN_CASOS)) * 100
         if metrica != "negras":
-            # grupos sem nenhuma célula com casos suficientes só ocupariam espaço
+            # tira as linhas que ficariam todas em branco
             manter = valores.notna().any(axis=1)
             if manter.any():
                 valores, tab_num, tab_den = valores[manter], tab_num[manter], tab_den[manter]
                 linhas = valores.index.tolist()
         texto = valores.map(lambda v: "" if pd.isna(v) else f"{v:.0f}%")
         sufixo = "%"
-    hover = [[
-        (f"{fmt_pct(valores.iat[i, j])} — {fmt_int(tab_num.iat[i, j])} de {fmt_int(tab_den.iat[i, j])} óbitos"
-         if metrica != "obitos" and pd.notna(valores.iat[i, j])
-         else f"{fmt_int(tab_num.iat[i, j])} óbitos" if metrica == "obitos"
-         else f"poucos casos para calcular % (n={fmt_int(tab_den.iat[i, j])})")
-        for j in range(len(colunas))] for i in range(len(linhas))]
+    # texto do mouse em cada célula (o mesmo texto vai para a tabela embaixo do gráfico)
+    hover = []
+    for i in range(len(linhas)):
+        linha = []
+        for j in range(len(colunas)):
+            n = tab_num.iat[i, j]
+            d = tab_den.iat[i, j]
+            v = valores.iat[i, j]
+            if metrica == "obitos":
+                linha.append(f"{fmt_int(n)} óbitos")
+            elif pd.isna(v):
+                linha.append(f"poucos casos para calcular % (n={fmt_int(d)})")
+            else:
+                linha.append(f"{fmt_pct(v)} — {fmt_int(n)} de {fmt_int(d)} óbitos")
+        hover.append(linha)
 
     zmax = valores.max().max()
     fig = go.Figure(go.Heatmap(
         z=valores.values, x=colunas, y=linhas, text=texto.values, texttemplate="%{text}",
         customdata=hover, xgap=2, ygap=2,
-        colorscale=[[i / (len(RAMPA) - 1), c] for i, c in enumerate(RAMPA)],
+        colorscale=ESCALA_AZUL,
         zmin=0, zmax=zmax if pd.notna(zmax) else 1,
-        colorbar=dict(thickness=10, len=0.8, outlinewidth=0, ticksuffix=sufixo, tickfont=dict(color=TINTA_MUDA)),
+        colorbar=dict(thickness=10, len=0.8, outlinewidth=0, ticksuffix=sufixo, tickfont=dict(color=CINZA)),
         hovertemplate="<b>%{y}</b> · %{x}<br>%{customdata}<extra></extra>",
     ))
     layout_base(fig, 400)
-    fig.update_xaxes(side="top", linecolor="rgba(0,0,0,0)", tickfont=dict(color=TINTA_2))
-    fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)", tickfont=dict(color=TINTA_2))
+    fig.update_xaxes(side="top", linecolor="rgba(0,0,0,0)", tickfont=dict(color=CINZA_ESCURO))
+    fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)", tickfont=dict(color=CINZA_ESCURO))
 
-    tabela = [{"Raça/cor": linhas[i], **{c: hover[i][j] for j, c in enumerate(colunas)}} for i in range(len(linhas))]
+    tabela = []
+    for i, raca in enumerate(linhas):
+        tabela.append({"Raça/cor": raca, **dict(zip(colunas, hover[i]))})
     return fig, tabela
 
 
@@ -258,14 +258,14 @@ def fig_causas(df):
             y=parte["rotulo"], x=parte["obitos"], name=f"Causa {tipo.lower()}", orientation="h",
             marker=dict(color=cor, cornerradius=4), width=0.6,
             text=parte["obitos"].map(fmt_int), textposition="outside", cliponaxis=False,
-            textfont=dict(color=TINTA_2, size=11),
+            textfont=dict(color=CINZA_ESCURO, size=11),
             customdata=parte[["categoria_descricao"]],
             hovertemplate="<b>%{customdata[0]}</b><br>%{x:,.0f} óbitos<extra>" + tipo + "</extra>",
         ))
-    # a legenda fica em HTML acima do gráfico (legenda_html): a do Plotly disputava espaço com os rótulos longos
+    # legenda do plotly brigava com os nomes compridos das causas, por isso ela é feita no html (legenda_html)
     layout_base(fig, 380, barmode="overlay", showlegend=False)
     fig.update_yaxes(categoryorder="array", categoryarray=df["rotulo"].tolist(), gridcolor="rgba(0,0,0,0)",
-                     tickfont=dict(color=TINTA_2, size=11))
+                     tickfont=dict(color=CINZA_ESCURO, size=11))
     fig.update_layout(margin=dict(r=44))  # espaço para o valor da maior barra
     fig.update_xaxes(visible=False, range=[0, df["obitos"].max() * 1.12])
     return fig
@@ -281,7 +281,7 @@ def fig_externas(df):
             continue
         fig.add_trace(go.Bar(
             x=tabela.index, y=tabela[grupo], name=grupo,
-            marker=dict(color=cor, line=dict(color=SUPERFICIE, width=1)),
+            marker=dict(color=cor, line=dict(color=BRANCO, width=1)),
             hovertemplate=f"{grupo}: %{{y:,.0f}}<extra></extra>",
         ))
     layout_base(fig, 340, barmode="stack", bargap=0.35, hovermode="x unified")
@@ -290,9 +290,7 @@ def fig_externas(df):
     return fig
 
 
-# ---------------------------------------------------------------------------
-# Layout
-# ---------------------------------------------------------------------------
+# layout da página
 app = Dash(
     __name__,
     title="Mortalidade Materna no Brasil · ODS 5 e 18",
@@ -314,7 +312,7 @@ def carregar_opcoes():
 def card(titulo, subtitulo, corpo, controles=None, classe=""):
     cabecalho = html.Div([
         html.Div([html.H3(titulo, className="card-titulo"), html.P(subtitulo, className="card-sub")]),
-        # "is not None": componentes Dash sem filhos têm len() == 0 e seriam tratados como falsos
+        # tem que ser "is not None": componente sem filhos (tipo o RadioItems) conta como False e o controle sumiria
         html.Div(controles, className="card-controles") if controles is not None else None,
     ], className="card-cabecalho")
     return html.Div([cabecalho, corpo], className=f"painel-card {classe}")
@@ -439,9 +437,7 @@ def montar_layout():
 app.layout = montar_layout  # função: cada visita lê as opções atualizadas do banco
 
 
-# ---------------------------------------------------------------------------
-# Callbacks
-# ---------------------------------------------------------------------------
+# callbacks
 @app.callback(
     Output("f-uf", "options"), Output("f-uf", "value", allow_duplicate=True),
     Input("f-regiao", "value"), State("f-uf", "value"), State("ufs-por-regiao", "data"),
@@ -471,8 +467,8 @@ def consultar_tudo(s, f, metrica, dimensao):
     return d
 
 
+# frases da "leitura rápida", calculadas com os filtros atuais (nenhum número fixo)
 def gerar_insights(d):
-    """Frases curtas calculadas sobre o recorte filtrado (nenhum número é fixo no código)."""
     o, a = d["oficiais"], d["agressoes"]
     itens = []
     if o["total"]:
@@ -533,10 +529,12 @@ def atualizar(anos, regioes, ufs, racas, faixas, metrica, dimensao, modo_serie, 
     try:
         d, sessao = db.executar(consultar_tudo, f, metrica, dimensao)
     except Exception as e:
+        # banco caiu: zera os KPIs, deixa os gráficos vazios e mostra o aviso vermelho
         vazio = figura_vazia("Banco indisponível")
+        kpis_vazios = ["–", "", "–", "", "–", "", "–", "", "–", ""]
         status = html.Span([html.Span(className="ponto ponto-erro"), "Sem conexão com o banco"])
-        return (*(["–", ""] * 5), vazio, vazio, vazio, vazio, None, vazio,
-                "", status, True, f"Não foi possível consultar o banco: {e}")
+        aviso = f"Não foi possível consultar o banco: {e}"
+        return (*kpis_vazios, vazio, vazio, vazio, vazio, None, vazio, "", status, True, aviso)
 
     o, a = d["oficiais"], d["agressoes"]
     n_anos = max(int(o["anos"]), 1)
@@ -553,12 +551,10 @@ def atualizar(anos, regioes, ufs, racas, faixas, metrica, dimensao, modo_serie, 
     tabela_html = dbc.Table.from_dataframe(pd.DataFrame(tabela), size="sm", striped=False, bordered=False,
                                            className="tabela") if tabela else None
 
+    # rodapé: mostra que os dados vieram do banco agora
     agora = datetime.now(FUSO).strftime("%H:%M:%S")
-    status = html.Span([
-        html.Span(className="ponto ponto-ok"),
-        f"Consultado ao vivo · {origem_banco()} · {sessao.n_consultas} consultas SQL em 1 ida ao banco, "
-        f"{sessao.ms:.0f} ms · às {agora}",
-    ])
+    texto = f"Consultado no banco às {agora} · {origem_banco()} · {sessao.n_consultas} consultas, {sessao.ms:.0f} ms"
+    status = html.Span([html.Span(className="ponto ponto-ok"), texto])
 
     return (*kpis,
             fig_serie(d["serie"], modo_serie), fig_causas(d["causas"]), fig_mapa(d["uf"], metrica),
@@ -569,8 +565,8 @@ def atualizar(anos, regioes, ufs, racas, faixas, metrica, dimensao, modo_serie, 
 _origem = None
 
 
+# pega a versão do PostgreSQL só uma vez, pra mostrar no rodapé (ex.: "PostgreSQL 18.7 · Aiven")
 def origem_banco():
-    """Texto 'PostgreSQL 16 · Aiven' para o rodapé (lido uma vez do próprio servidor)."""
     global _origem
     if _origem is None:
         try:
