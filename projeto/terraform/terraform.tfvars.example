@@ -3,3 +3,6 @@ cloud_name = "do-nyc"
 # plan       = "free-1-1gb"
 # aiven_project = "diego7k"
 # service_name  = "pg-3f45094b"
+
+# fase 3: publicar o dashboard no Render (precisa de RENDER_API_KEY e RENDER_OWNER_ID no ambiente)
+# criar_dashboard = true

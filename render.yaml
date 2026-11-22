@@ -1,0 +1,19 @@
+# Blueprint do Render: alternativa ao Terraform para publicar só o dashboard.
+# dashboard.render.com > New > Blueprint > escolher este repositório.
+# O valor de DATABASE_URL é pedido na criação (sync: false = não fica no Git).
+services:
+  - type: web
+    name: painel-mortalidade-materna
+    runtime: python
+    plan: free
+    region: virginia
+    rootDir: projeto
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --chdir dashboard app:server --workers 2 --timeout 60 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.9

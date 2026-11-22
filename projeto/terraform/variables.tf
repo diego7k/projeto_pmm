@@ -26,3 +26,28 @@ variable "usuario_leitura" {
   type        = string
   default     = "painel_leitura"
 }
+
+# ---------------- Fase 3: hospedagem do dashboard no Render ----------------
+variable "criar_dashboard" {
+  description = "Cria o web service do dashboard no Render (false = só o banco)"
+  type        = bool
+  default     = false
+}
+
+variable "render_plano" {
+  description = "Plano do web service no Render (free hiberna após 15 min sem acesso)"
+  type        = string
+  default     = "free"
+}
+
+variable "render_regiao" {
+  description = "Região do Render: oregon, ohio, virginia, frankfurt ou singapore"
+  type        = string
+  default     = "virginia"
+}
+
+variable "repo_url" {
+  description = "Repositório com o código do dashboard"
+  type        = string
+  default     = "https://github.com/diego7k/projeto_fase2"
+}

@@ -51,3 +51,17 @@ Os dois CSVs tratados somam 6,6 MB (4,2 MB + 2,4 MB), contra 21 MB dos dois orig
 ## Banco
 
 PostgreSQL no Aiven, schema `painel`, com duas tabelas (`obitos_maternos_oficiais` e `obitos_desconsiderados`) que seguem as colunas dos CSVs. A carga é feita com `COPY` pelo `src/load.py`.
+
+## Fase 3: dashboard
+
+- **Plotly Dash.** O pipeline inteiro já era Python. Com Dash, uma única linguagem cobre ETL, carga e visualização, e o app sobe com um comando.
+- **Consulta ao vivo, sem cache.** Toda agregação (`SUM`, `FILTER`, `GROUP BY`, função de janela) é feita no PostgreSQL a cada mudança de filtro. O Python só monta os gráficos. Cada atualização trafega poucos KB, em vez das cerca de 28 mil linhas.
+- **Otimização de latência.** O servidor da Aiven fica a cerca de 185 ms de distância, e a consulta em si leva poucos milissegundos. O custo estava no número de idas e voltas, não no SQL. Na primeira versão, as 8 consultas de cada atualização iam uma de cada vez, mais um `ROLLBACK`, e levavam 1,9 s. Agora vão num único `SELECT`, com cada consulta como subconsulta `SELECT json_agg(t) FROM (...) t`, e as conexões usam autocommit. O tempo caiu para 0,2 a 0,3 s.
+- **Sem SQL injection.** Os filtros viram parâmetros do psycopg2 (`%s` e `= ANY(%s)`). Nomes de coluna vindos da tela (como a dimensão da matriz) passam por uma lista fechada antes de entrar no SQL.
+- **Menor privilégio.** Na nuvem, o dashboard usa o `painel_leitura`, que só tem `SELECT`, transações somente leitura e `statement_timeout` de 15 s (`sql/permissoes.sql`).
+- **Conexões.** O pool abre no máximo 5 conexões por processo. Com 2 workers do gunicorn, são 10, abaixo do limite de 20 do plano gratuito. Uma conexão que cai é descartada, e a consulta é refeita uma vez.
+- **Porcentagens instáveis.** Grupos com menos de 20 óbitos ficam sem porcentagem na matriz e no mapa, porque um único óbito mudaria o resultado em vários pontos percentuais.
+- **Denominadores.** O indicador de mulheres negras divide pelos óbitos com raça/cor informada (2,3% são "Ignorado"). O de assassinatos usa os desconsiderados com CID-10 X85 a Y09 (agressões), que não entram na razão de mortalidade materna oficial, mas são centrais para a ODS 5.
+- **Cores.** Cada raça/cor tem uma cor fixa em todos os gráficos, e a cor não muda quando se filtra. A paleta foi validada para daltonismo. Mapa e matriz usam escala de um tom só.
+- **Mapa leve.** O contorno das UFs (`dashboard/br_ufs.geojson`) foi simplificado de 3,3 MB para 165 KB.
+- **Hospedagem.** O dashboard roda no Render, plano gratuito, com deploy automático a cada push e provider Terraform oficial.

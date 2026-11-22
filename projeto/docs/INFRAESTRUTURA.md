@@ -68,3 +68,21 @@ CSVs tratados (data/processed)
    ▼
 sql/permissoes.sql ──► usuário painel_leitura pronto para o painel
 ```
+
+## Fase 3: hospedagem do dashboard
+
+| Recurso Terraform | O que é |
+|---|---|
+| `render_web_service.dashboard` (`terraform/dashboard.tf`) | Web service Python no Render, com o Plotly Dash rodando no gunicorn. Conecta no banco com o usuário `painel_leitura`. Só é criado com `criar_dashboard = true`. |
+
+Escolhemos o Render porque ele tem plano gratuito, faz deploy automático a cada push e tem um
+provider Terraform oficial (`render-oss/render`). O passo a passo de publicação está em
+[IMPLANTACAO.md](IMPLANTACAO.md). O arquivo `render.yaml`, na raiz do repositório, é uma
+alternativa sem Terraform.
+
+```
+PostgreSQL na Aiven (schema painel)
+   ▲  SQL parametrizado, usuário painel_leitura (só leitura)
+   │
+Dashboard Plotly Dash ── Render (gunicorn) ──► navegador
+```
