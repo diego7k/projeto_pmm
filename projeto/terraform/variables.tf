@@ -49,5 +49,5 @@ variable "render_regiao" {
 variable "repo_url" {
   description = "Repositório com o código do dashboard"
   type        = string
-  default     = "https://github.com/diego7k/projeto_fase2"
+  default     = "https://github.com/diego7k/projeto_pmm"
 }
