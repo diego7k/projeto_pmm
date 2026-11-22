@@ -62,11 +62,11 @@ lista o plano gratuito.
 As duas opções usam o mesmo comando:
 
 ```
-gunicorn --chdir dashboard app:server --workers 2 --timeout 60 --bind 0.0.0.0:$PORT
+gunicorn --chdir dashboard app:server --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT
 ```
 
-Cada worker abre no máximo 5 conexões. Dois workers somam 10 conexões, abaixo do limite de 20 do
-plano gratuito da Aiven.
+Um único processo com 4 threads cabe nos 512 MB do plano gratuito do Render. O pool abre no máximo
+5 conexões, bem abaixo do limite de 20 do plano gratuito da Aiven.
 
 ## Problemas comuns
 
@@ -75,5 +75,5 @@ plano gratuito da Aiven.
 | `could not translate host name ... aivencloud.com` | O serviço gratuito foi desligado por inatividade | Ligue o serviço no console da Aiven (Power on). O endereço volta em 1 a 3 minutos. |
 | `password authentication failed` | A senha foi trocada | Gere o `.env` de novo com `terraform output`, ou atualize a variável no Render. |
 | A primeira visita ao Render demora | O plano free hiberna | Abra o link alguns minutos antes da apresentação. |
-| `too many connections` | O limite de 20 conexões foi atingido | Não suba mais que 2 workers do gunicorn. |
+| `too many connections` | O limite de 20 conexões foi atingido | Mantenha 1 worker do gunicorn (cada worker abre até 5 conexões). |
 | `permission denied for table` | O `sql/permissoes.sql` não foi aplicado | Rode o `psql ... -f sql/permissoes.sql` (veja INFRAESTRUTURA.md). |

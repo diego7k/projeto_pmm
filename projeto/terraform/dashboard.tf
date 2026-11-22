@@ -8,7 +8,7 @@ resource "render_web_service" "dashboard" {
   plan              = var.render_plano
   region            = var.render_regiao
   root_directory    = "projeto"
-  start_command     = "gunicorn --chdir dashboard app:server --workers 2 --timeout 60 --bind 0.0.0.0:$PORT"
+  start_command     = "gunicorn --chdir dashboard app:server --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT"
   health_check_path = "/"
 
   runtime_source = {
