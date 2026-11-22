@@ -15,7 +15,7 @@ consultados ao vivo por um dashboard em Plotly Dash.
 
 ## Acesso ao dashboard
 
-**Dashboard publicado:** `https://<preencher-após-o-deploy>.onrender.com`
+**Dashboard publicado: https://painel-mortalidade-materna.onrender.com**
 
 O plano gratuito do Render hiberna depois de 15 minutos sem acesso, então a primeira visita pode
 levar cerca de 50 segundos.
@@ -62,14 +62,16 @@ agregadas** no PostgreSQL, parametrizadas pelos filtros
 tempo gasto no banco e o horário. Por exemplo:
 
 ```
-● Consultado ao vivo · PostgreSQL 18.7 · Aiven · 8 consultas SQL em 1 ida ao banco, 314 ms · às 16:15:02
+● Consultado ao vivo · PostgreSQL 18.7 · Aiven · 8 consultas SQL em 1 ida ao banco, 62 ms · às 16:47:47
 ```
 
 **Otimização.** O servidor da Aiven fica a cerca de 185 ms de distância, e quase todo o tempo de
 uma consulta é gasto na rede. Enviadas uma a uma, as 8 consultas levavam 1,9 s. Agora elas seguem
 num único `SELECT`, em que cada consulta vira uma subconsulta `json_agg(...)`. As conexões usam
 autocommit, o que elimina a ida extra do `ROLLBACK`. O tempo caiu para 0,2 a 0,3 s, cerca de 8
-vezes mais rápido, e os dados continuam vindo do banco em tempo real.
+vezes mais rápido, e os dados continuam vindo do banco em tempo real. Na versão publicada, o
+servidor do Render (Virginia, EUA) fica perto do banco da Aiven (Nova York), e cada atualização
+leva de 60 a 200 ms.
 
 Na nuvem, o dashboard conecta com o usuário `painel_leitura`, que só tem `SELECT` e roda em modo
 somente leitura ([sql/permissoes.sql](projeto/sql/permissoes.sql)).
